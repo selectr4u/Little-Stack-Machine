@@ -1,7 +1,7 @@
 mod lsm;
 
 use std::env;
-use crate::lsm::{Instruction, RawInstruction, DEFAULT_INSTRUCTION_SET, VM};
+use crate::lsm::{DEFAULT_INSTRUCTION_SET, VM};
 
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
