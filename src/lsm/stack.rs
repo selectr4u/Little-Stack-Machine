@@ -1,12 +1,15 @@
-const STACK_SIZE: usize = 128; // artificial limit
-
 pub struct Stack<T> {
     stack: Vec<T>,
+    size: usize,
 }
 
 impl<T> Stack<T> {
+
+    pub fn new(stack_size: usize) -> Stack<T> {
+        Stack { stack: Vec::with_capacity(stack_size), size: stack_size }
+    }
     pub fn push(&mut self, item: T) {
-        if self.stack.len() >= STACK_SIZE {
+        if self.stack.len() >= self.size {
             panic!("stack overflow");
         }
         self.stack.push(item);
