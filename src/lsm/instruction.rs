@@ -2,8 +2,9 @@ use crate::lsm::vm::{OperandSize, VM};
 
 pub type OpcodeSize = u8;
 
-pub type InstructionFunc = fn(&mut VM, OperandSize);
+pub type InstructionFunc = fn(&mut VM, Option<OperandSize>);
 
+#[derive(Clone)]
 pub struct Instruction {
     pub name:      &'static str,
     pub opcode: OpcodeSize,
@@ -30,113 +31,135 @@ MOD - 7 - gets the modulus for second value on stack by first value on the stack
 BRZ - 8 - expects virtual address, and it branches to that if top value on stack is zero
 BRP - 9 - expects virtual address, and it branches to that if top value on stack is zero or positive
 BRA - 10 - expects virtual address, and it branches to that
+OUT - 11 - prints the topmost item on the stack (debug)
+DUP - 12 - duplicates the top of the stack
 HLT - 0 - halts the program
  */
 
-pub const DEFAULT_INSTRUCTION_SET: Vec<Instruction> = vec![
-    Instruction{
+pub const DEFAULT_INSTRUCTION_SET: &[Instruction] = &[
+    Instruction {
         name: "PUSH",
         opcode: 1,
         requires_operand: true,
         func: |vm, operand| {
-            vm.push(operand);
+            vm.push(operand.unwrap());
         }
     },
-    Instruction{
+    Instruction {
         name: "POP",
         opcode: 2,
         requires_operand: false,
-        func: |vm, operand| {
+        func: |vm, _operand| {
             vm.pop().unwrap();
         }
     },
-    Instruction{
+    Instruction {
         name: "ADD",
-        opcode: 1,
+        opcode: 3,
         requires_operand: true,
-        func: |vm, operand| {
-            let a = vm.pop().unwrap();
-            let b = vm.pop().unwrap();
+        func: |vm, _operand| {
+            let a = vm.pop().expect("stack underflow > 1");
+            let b = vm.pop().expect("stack underflow > 2");
             vm.push(a + b);
         }
     },
-    Instruction{
+    Instruction {
         name: "MUL",
-        opcode: 1,
+        opcode: 4,
         requires_operand: true,
-        func: |vm, operand| {
-            let a = vm.pop().unwrap();
-            let b = vm.pop().unwrap();
+        func: |vm, _operand| {
+            let a = vm.pop().expect("stack underflow > 1");
+            let b = vm.pop().expect("stack underflow > 2");
             vm.push(a * b);
         }
     },
-    Instruction{
+    Instruction {
         name: "SUB",
-        opcode: 1,
+        opcode: 5,
         requires_operand: true,
-        func: |vm, operand| {
-            let a = vm.pop().unwrap();
-            let b = vm.pop().unwrap();
+        func: |vm, _operand| {
+            let a = vm.pop().expect("stack underflow > 1");
+            let b = vm.pop().expect("stack underflow > 2");
             vm.push(b - a);
         }
     },
-    Instruction{
+    Instruction {
         name: "DIV",
-        opcode: 1,
+        opcode: 6,
         requires_operand: true,
-        func: |vm, operand| {
-            let a = vm.pop().unwrap();
-            let b = vm.pop().unwrap();
+        func: |vm, _operand| {
+            let a = vm.pop().expect("stack underflow > 1");
+            let b = vm.pop().expect("stack underflow > 2");
             vm.push(b / a);
         }
     },
-    Instruction{
+    Instruction {
         name: "MOD",
-        opcode: 1,
+        opcode: 7,
         requires_operand: true,
-        func: |vm, operand| {
-            let a = vm.pop().unwrap();
-            let b = vm.pop().unwrap();
+        func: |vm, _operand| {
+            let a = vm.pop().expect("stack underflow > 1");
+            let b = vm.pop().expect("stack underflow > 2");
             vm.push(b % a);
         }
     },
-    Instruction{
+    Instruction {
         name: "BRZ",
-        opcode: 1,
+        opcode: 8,
         requires_operand: true,
         func: |vm, operand| {
-            let a = vm.pop().unwrap();
+            let a = vm.pop().expect("stack underflow > 1");
             if a == 0 {
-                vm.branch(operand);
+                vm.branch(operand.unwrap());
             }
         }
     },
-    Instruction{
+    Instruction {
         name: "BRP",
-        opcode: 1,
+        opcode: 9,
         requires_operand: true,
         func: |vm, operand| {
-            let a = vm.pop().unwrap();
+            let a = vm.pop().expect("stack underflow > 1");
             if a >= 0 {
-                vm.branch(operand);
+                vm.branch(operand.unwrap());
             }
         }
     },
-    Instruction{
+    Instruction {
         name: "BRA",
-        opcode: 1,
+        opcode: 10,
         requires_operand: true,
         func: |vm, operand| {
-            let a = vm.pop().unwrap();
-            vm.branch(operand);
+            vm.branch(operand.unwrap());
         }
     },
-    Instruction{
+    Instruction {
         name: "HLT",
-        opcode: 1,
+        opcode: 0,
         requires_operand: true,
-        func: |vm, operand| {
+        func: |vm, _operand| {
             vm.halt();
+        }
+    },
+    Instruction {
+        name: "OUT",
+        opcode: 11,
+        requires_operand: true,
+        func: |vm, _operand| {
+            let a = vm.pop().expect("stack underflow > 1");
+            println!("{}", a);
+            // and push back on stack for like a peek like behaviour
+            vm.push(a);
+        }
+    },
+    Instruction {
+        name: "DUP",
+        opcode: 12,
+        requires_operand: true,
+        func: |vm, _operand| {
+            let a_ref = vm.peek().expect("stack underflow > 1");
+            let a = a_ref.clone();
+            vm.push(a);
         }
     },
 ];

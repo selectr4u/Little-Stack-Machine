@@ -19,6 +19,10 @@ impl<T> Stack<T> {
         self.stack.pop()
     }
 
+    pub fn peek(&mut self) -> Option<&T> {
+        self.stack.last()
+    }
+
     pub fn len(&self) -> usize {
         self.stack.len()
     }
