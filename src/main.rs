@@ -13,7 +13,7 @@ fn main() {
     }
 
     let instruction_set = DEFAULT_INSTRUCTION_SET.to_vec();
-    let mut vm = VM::new(instruction_set, None, None);
+    let mut vm = VM::new(instruction_set, None, None, None);
 
     // check if it's --file or --string
     match args[1].as_str() {
@@ -26,8 +26,14 @@ fn main() {
         "--string" => {
             // we just send the input after --string into the vm
             let string = &args[2..];
+            let mut bytes : &mut [u8] = &mut [];
 
-            vm.load_bytecode(string.to_string());
+            for s in string {
+                let s_as_bytes = s.as_bytes();
+                bytes.copy_from_slice(s_as_bytes);
+            }
+
+            vm.load_bytecode(bytes);
 
             vm.run();
         }
