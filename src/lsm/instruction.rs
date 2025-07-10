@@ -34,17 +34,8 @@ BRA - 10 - expects virtual address, and it branches to that
 DUP - 11 - duplicates the top of the stack
 OUT - 100 - prints the topmost item on the stack (debug)
 HLT - 0 - halts the program
+...
  */
-
-impl ToNumber for Value {
-    fn to_number(self) -> Result<OperandSize, ()> {
-        // we want to consume it as well bc we're turning it to a number so no &self but self
-        match self {
-            Value::Number(n) => Ok(n),
-            _ => Err(()),
-        }
-    }
-}
 
 
 pub const DEFAULT_INSTRUCTION_SET: &[Instruction] = &[
@@ -73,15 +64,7 @@ pub const DEFAULT_INSTRUCTION_SET: &[Instruction] = &[
             let a = vm.pop().expect("stack underflow > 1");
             let b = vm.pop().expect("stack underflow > 2");
 
-            // check they are both numbers
-            let is_a_num = matches!(a, Value::Number {..});
-            let is_b_num = matches!(b, Value::Number {..});
-
-            if is_a_num && is_b_num {
-                vm.push(Value::Number(a.to_number().unwrap() + b.to_number().unwrap()));
-            } else {
-                panic!("cannot perform addition on non numbers");
-            }
+            vm.push(Value::Number(a.to_number().unwrap() + b.to_number().unwrap()));
         }
     },
     Instruction {
@@ -188,7 +171,8 @@ pub const DEFAULT_INSTRUCTION_SET: &[Instruction] = &[
         opcode: 12,
         requires_operand: true,
         func: |vm, operand| {
-            // operand is the index/key for the const pool // TODO clarify
+            // operand is the key for the const pool
+            // turn operand into an integer
             let a = vm.get_const_copy(operand.clone().unwrap().to_number().expect("operand not supplied/not a proper key"));
 
             match a {
@@ -196,10 +180,30 @@ pub const DEFAULT_INSTRUCTION_SET: &[Instruction] = &[
                     vm.push(a);
                 }
                 None => {
-                    // TODO clarify index or key
-                    panic!("no value at index/key provided {:?}", operand.unwrap());
+                    panic!("no value at key provided {:?}", operand.unwrap());
                 }
             }
+        }
+    },
+    Instruction {
+        name: "STOREC",
+        opcode: 13,
+        requires_operand: true,
+        func: |vm, _operand| {
+            // stores top of stack as a const
+            let a = vm.pop().expect("stack underflow > 1");
+            let key = vm.store_const(a);
+
+            vm.push(Value::Number(key as OperandSize));
+        }
+    },
+
+    Instruction {
+        name: "DELETEC",
+        opcode: 14,
+        requires_operand: true,
+        func: |vm, operand| {
+            vm.remove_const(operand.unwrap().to_number().unwrap());
         }
     },
 ];

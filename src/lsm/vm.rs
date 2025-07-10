@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::rc::Rc;
 use crate::lsm::instruction::{Instruction, RawInstruction, OpcodeSize};
 use crate::lsm::stack::Stack;
@@ -9,6 +10,8 @@ const BYTECODE_CONSTS_SIGNATURE: &str = "!CONSTS";
 const BYTECODE_INSTRUCTIONS_SIGNATURE: &str = "!INSTR";
 
 pub type OperandSize = f64;
+pub type ConstPool = HashMap<usize, Value>;
+
 #[derive(Clone, Debug)]
 pub enum Value {
     Number(OperandSize), // OperandSize bytes
@@ -21,20 +24,30 @@ pub trait ToNumber {
     fn to_number(self) -> Result<OperandSize, ()>;
 }
 
+impl ToNumber for Value {
+    fn to_number(self) -> Result<OperandSize, ()> {
+        // we want to consume it as well bc we're turning it to a number so no &self but self
+        match self {
+            Value::Number(n) => Ok(n),
+            _ => Err(()),
+        }
+    }
+}
+
 pub struct VM {
     instruction_set: Vec<Instruction>,
     code: Vec<RawInstruction>,
-    const_pool: Vec<Value>,
+    const_pool: ConstPool,
     stack: Stack<Value>,
     pc: usize,
     stop: bool,
 }
 
 impl VM {
-    pub fn new(instruction_set: Vec<Instruction>, initial_code : Option<Vec<RawInstruction>>, initial_consts : Option<Vec<Value>>,stack_size: Option<usize>  ) -> VM {
+    pub fn new(instruction_set: Vec<Instruction>, initial_code : Option<Vec<RawInstruction>>, initial_consts : Option<ConstPool>,stack_size: Option<usize>  ) -> VM {
         let local_initial_code : Vec<RawInstruction>;
         let local_stack_size : usize;
-        let local_initial_consts: Vec<Value>;
+        let local_initial_consts: ConstPool;
 
         match initial_code {
             Some(raw) => local_initial_code = raw,
@@ -43,7 +56,7 @@ impl VM {
 
         match initial_consts {
             Some(consts) => local_initial_consts = consts,
-            None => local_initial_consts = vec![]
+            None => local_initial_consts = HashMap::new(),
         }
 
         match stack_size {
@@ -103,6 +116,7 @@ impl VM {
 
             // we kinda need a 'cursor' approach with this one
             // so every type byte where there's no match, check for instructions signature
+            let mut const_count = 0;
 
             loop {
                 if cursor >= bytecode.len() - 1 {
@@ -116,8 +130,9 @@ impl VM {
                         // int
                         // is OperandSize bytes
                         let int_bytes = &bytecode[cursor..size_of::<OperandSize>()];
-                        self.const_pool.push(Number(OperandSize::from_le_bytes(int_bytes.try_into().unwrap())));
+                        self.const_pool.insert(const_count, Number(OperandSize::from_le_bytes(int_bytes.try_into().unwrap())));
                         cursor += size_of::<OperandSize>() + 1;
+                        const_count += 1;
                     }
                     2 => {
                         // string
@@ -129,8 +144,9 @@ impl VM {
                         let string = str::from_utf8(&string_bytes);
 
                         if string.is_ok() {
-                            self.const_pool.push(Str(Rc::new(string.unwrap().to_string())));
+                            self.const_pool.insert(const_count, Str(Rc::new(string.unwrap().to_string())));
                             cursor += 1 + size_of::<u32>() + string_length as usize;
+                            const_count += 1;
                         } else {
                             panic!("couldn't decode string from {:?} with provided length {}", string_bytes, string_length);
                         }
@@ -139,14 +155,16 @@ impl VM {
                         // boolean
                         // is 1 byte
                         let boolean_byte = bytecode[cursor + 1];
-                        self.const_pool.push(Value::Bool(boolean_byte != 0));
+                        self.const_pool.insert(const_count, Value::Bool(boolean_byte != 0));
                         cursor += 2;
+                        const_count += 1;
                     }
                     4 => {
                         // nil
                         // is 0 bytes
-                        self.const_pool.push(Value::Nil);
+                        self.const_pool.insert(const_count, Value::Nil);
                         cursor += 1;
+                        const_count += 1;
                     }
                     _ => {
                         // not specified so we check for instructions signature here
@@ -321,27 +339,32 @@ impl VM {
         !unimplemented!()
     }
 
-    // gets the reference to a value at specified index of the const pool
-    pub fn get_const_ref(&self, index: OperandSize) -> Option<&Value> {
-        self.const_pool.get(index as usize)
+    // gets the reference to a value at specified key of the const pool
+    pub fn get_const_ref(&self, key: OperandSize) -> Option<&Value> {
+        self.const_pool.get(&(key as usize))
     }
 
-    // gets the copy of a value at specified index of the const pool
-    pub fn get_const_copy(&self, index: OperandSize) -> Option<Value> {
-        if index >= (self.const_pool.len() - 1) as OperandSize {
+    // gets the copy of a value at specified key of the const pool
+    pub fn get_const_copy(&self, key: OperandSize) -> Option<Value> {
+        if let Some(value) = self.const_pool.get(&(key as usize)) {
+            Some(value.clone())
+        } else {
             None
         }
-        else {
-            Some(self.const_pool[index as usize].clone())
-        }
     }
 
-    // removes the value at specified index of the const pool
-    pub fn remove_const(&mut self, index: OperandSize) {
-        if index >= (self.const_pool.len() - 1) as OperandSize {
-            return;
-        }
+    // removes the value at specified key of the const pool
+    pub fn remove_const(&mut self, key: OperandSize) {
+        self.const_pool.remove(&(key as usize));
+    }
 
-        self.const_pool.remove(index as usize);
+    // stores the const provided and returns key value
+    pub fn store_const(&mut self, value: Value) -> usize {
+        // key should be length of hashmap + 1 (basically a counter)
+        let key = self.const_pool.len() + 1usize;
+
+        self.const_pool.insert(key, value);
+
+        key
     }
 }
